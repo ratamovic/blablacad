@@ -3,6 +3,7 @@ import bpy
 from bpy.props import PointerProperty, EnumProperty
 
 from . import sinegear
+from .meshify import Meshify, MeshifyData
 from .sinegear import SineGear, SineGearData
 
 bl_info = {
@@ -17,6 +18,7 @@ def TypeProperty():
     return EnumProperty(
         items=[
             ("NONE", "None", ""),
+            ("MESHIFY", "Meshify", ""),
             ("SINEGEAR", "Sine Gear", "")],
         name="Type",
         description="Type",
@@ -24,6 +26,7 @@ def TypeProperty():
 
 
 class BlaBlaCADData(bpy.types.PropertyGroup):
+    meshify_data: PointerProperty(type=MeshifyData)
     sinegear_data: PointerProperty(type=SineGearData)
     type: TypeProperty()
 
@@ -34,6 +37,7 @@ class BlaBlaCADMenu(bpy.types.Menu):
 
     def draw(self, context):
         self.layout.label(text="BlaBlaCAD", icon='WORLD_DATA')
+        self.layout.operator(Meshify.bl_idname)
         self.layout.operator(SineGear.bl_idname)
 
 
@@ -42,6 +46,7 @@ def blablacad_menu(self, context):
 
 
 def register():
+    meshify.register()
     sinegear.register()
 
     bpy.utils.register_class(BlaBlaCADData)
@@ -57,6 +62,7 @@ def unregister():
     bpy.utils.unregister_class(BlaBlaCADData)
 
     sinegear.unregister()
+    meshify.unregister()
 
 
 if __name__ == "__main__":

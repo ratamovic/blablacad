@@ -5,7 +5,7 @@ import math
 from bpy.props import FloatProperty, BoolProperty, IntProperty
 from mathutils import Vector
 
-from .globals import is_sinegear_data, get_sinegear_data, get_sinegear_enum, make_sinegear_data
+from .globals import has_sinegear_data, get_sinegear_data, get_sinegear_enum, make_sinegear_data
 from .utils import polar_to_xy
 
 
@@ -146,7 +146,7 @@ class SineGearEditPanel(bpy.types.Panel):
     def poll(cls, context):
         return len(context.selected_objects) > 0 \
                and context.object.type == "MESH" \
-               and is_sinegear_data(context.object) \
+               and has_sinegear_data(context.object) \
                and context.object in context.selected_objects
 
     def draw(self, context):
