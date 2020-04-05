@@ -1,18 +1,9 @@
 import bpy
 import bpy_extras
 from bpy.props import BoolProperty, PointerProperty
+from typing import List
 
 from .globals import has_meshify_data, get_meshify_data, get_meshify_enum, make_meshify_data
-
-
-def find_all_meshify_data_from_source(obj):
-    targets = []
-    for other_obj in bpy.data.objects:
-        if has_meshify_data(other_obj):
-            meshify_data: MeshifyData = get_meshify_data(other_obj)
-            if meshify_data.source_object == obj:
-                targets.append(meshify_data)
-    return targets
 
 
 def is_meshify_source(obj):
@@ -215,14 +206,28 @@ class MeshifyEditPanel(bpy.types.Panel):
 
 
 @bpy.app.handlers.persistent
-def detect_changes(scene):
+def detect_changes(_):
     context = bpy.context
     depsgraph = context.evaluated_depsgraph_get()
+    processed_list: List[bpy.types.Object]() = list()
 
-    for meshify_data_to_update in [meshify_data
-                                   for src_obj in map(lambda _: _.id.original, depsgraph.updates) if is_meshify_source(src_obj)
-                                   for meshify_data in find_all_meshify_data_from_source(src_obj)]:
-        meshify_data_to_update.meshify(context)
+    def find_all_meshify_obj_from_source(source_obj):
+        return [other_obj for other_obj in bpy.data.objects
+                if has_meshify_data(other_obj) and get_meshify_data(other_obj).source_object == source_obj]
+
+    def update_meshify_obj(meshify_obj, processed_list):
+        if meshify_obj not in processed_list:
+            processed_list.append(meshify_obj)
+            meshify_data = get_meshify_data(meshify_obj)
+            meshify_data.meshify(context)
+
+    for changed_obj in [obj for obj in map(lambda _: _.id.original, depsgraph.updates)]:
+        if is_meshify_source(changed_obj):
+            for meshify_obj in find_all_meshify_obj_from_source(changed_obj):
+                update_meshify_obj(meshify_obj, processed_list)
+
+        if has_meshify_data(changed_obj):
+            update_meshify_obj(changed_obj, processed_list)
 
 
 def register():
