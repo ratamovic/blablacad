@@ -121,7 +121,10 @@ class Meshify(bpy.types.Operator):
         set_meshify_source(selected_obj)
 
         mesh = bpy.data.meshes.new("Meshify")
-        obj = bpy_extras.object_utils.object_data_add(context, mesh, operator=None)
+        obj = bpy_extras.object_utils.object_data_add(context,
+                                                      obdata=mesh,
+                                                      operator=None,
+                                                      name=selected_obj.name + " meshify")
         meshify_data: MeshifyData = make_meshify_data(obj)
         meshify_data.source_object = selected_obj
 
