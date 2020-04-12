@@ -3,6 +3,7 @@ import bpy_extras
 from bpy.props import BoolProperty, PointerProperty
 
 from .globals import has_meshify_data, get_meshify_data, get_meshify_enum, make_meshify_data
+from .utils import Lockable, if_unlocked
 
 
 def is_meshify_source(obj):
@@ -67,7 +68,7 @@ def SyncScaleProperty(update=None):
         update=update)
 
 
-class MeshifyData(bpy.types.PropertyGroup):
+class MeshifyData(bpy.types.PropertyGroup, Lockable):
 
     def meshify(self, context):
         if self.source_object is not None and self.keep_in_sync:
@@ -83,12 +84,12 @@ class MeshifyData(bpy.types.PropertyGroup):
             if self.sync_scale:
                 self.id_data.scale = self.source_object.scale
 
-    keep_in_sync: KeepInSyncProperty(update=meshify)
-    source_object: SourceObjectProperty(update=meshify)
-    sync_location: SyncLocationProperty(update=meshify)
-    sync_mesh: SyncMeshProperty(update=meshify)
-    sync_rotation: SyncRotationProperty(update=meshify)
-    sync_scale: SyncScaleProperty(update=meshify)
+    keep_in_sync: KeepInSyncProperty(update=if_unlocked(meshify))
+    source_object: SourceObjectProperty(update=if_unlocked(meshify))
+    sync_location: SyncLocationProperty(update=if_unlocked(meshify))
+    sync_mesh: SyncMeshProperty(update=if_unlocked(meshify))
+    sync_rotation: SyncRotationProperty(update=if_unlocked(meshify))
+    sync_scale: SyncScaleProperty(update=if_unlocked(meshify))
 
 
 class Meshify(bpy.types.Operator):
@@ -125,6 +126,7 @@ class Meshify(bpy.types.Operator):
                                                       operator=None,
                                                       name=selected_obj.name + " meshify")
         meshify_data: MeshifyData = make_meshify_data(obj)
+        meshify_data.lock()
         meshify_data.source_object = selected_obj
 
         if self.keep_in_sync != meshify_data.keep_in_sync:
@@ -138,6 +140,7 @@ class Meshify(bpy.types.Operator):
         if self.sync_scale != meshify_data.sync_scale:
             meshify_data.sync_scale = self.sync_scale
 
+        meshify_data.unlock()
         meshify_data.meshify(context)
         return {"FINISHED"}
 

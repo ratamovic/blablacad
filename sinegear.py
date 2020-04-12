@@ -6,7 +6,7 @@ from bpy.props import FloatProperty, BoolProperty, IntProperty
 from mathutils import Vector
 
 from .globals import has_sinegear_data, get_sinegear_data, get_sinegear_enum, make_sinegear_data
-from .utils import polar_to_xy
+from .utils import polar_to_xy, Lockable, if_unlocked
 
 
 # noinspection PyPep8Naming
@@ -70,7 +70,7 @@ def TeethLengthProperty(update=None):
         update=update)
 
 
-class SineGearData(bpy.types.PropertyGroup):
+class SineGearData(bpy.types.PropertyGroup, Lockable):
 
     def generate_mesh(self, context):
         def step_to_theta(i):
@@ -119,6 +119,7 @@ class SineGear(bpy.types.Operator):
         obj = bpy_extras.object_utils.object_data_add(context, mesh, operator=None)
 
         sinegear_data: SineGearData = make_sinegear_data(obj)
+        sinegear_data.lock()
         if self.make_face != sinegear_data.make_face:
             sinegear_data.make_face = self.make_face
         if self.radius != sinegear_data.radius:
@@ -129,7 +130,10 @@ class SineGear(bpy.types.Operator):
             sinegear_data.teeth_count = self.teeth_count
         if self.teeth_length != sinegear_data.teeth_length:
             sinegear_data.teeth_length = self.teeth_length
+        if self.type != sinegear_data.type:
+            sinegear_data.type = self.type
 
+        sinegear_data.unlock()
         sinegear_data.generate_mesh(context)
         return {"FINISHED"}
 
