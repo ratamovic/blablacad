@@ -2,7 +2,7 @@ import bmesh
 import bpy
 import bpy_extras
 import math
-from bpy.props import FloatProperty, BoolProperty, IntProperty
+from bpy.props import BoolProperty, FloatProperty, EnumProperty, IntProperty
 from mathutils import Vector
 
 from .globals import has_sinegear_data, get_sinegear_data, get_sinegear_enum, make_sinegear_data
@@ -70,9 +70,21 @@ def TeethLengthProperty(update=None):
         update=update)
 
 
+# noinspection PyPep8Naming
+def TypeProperty(update=None):
+    return EnumProperty(
+        items=[
+            ("MESH", "Mesh", ""),
+            ("POLY", "Poly", "")],
+        name="Type",
+        description="Type",
+        default="POLY",
+        update=update)
+
+
 class SineGearData(bpy.types.PropertyGroup, Lockable):
 
-    def generate_mesh(self, context):
+    def generate(self, context):
         def step_to_theta(i):
             theta_min = -180
             theta_max = 180
@@ -81,7 +93,29 @@ class SineGearData(bpy.types.PropertyGroup, Lockable):
         polar_path = [(self.radius + (math.sin(theta * self.teeth_count) * self.teeth_length), theta)
                       for theta in map(step_to_theta, range(0, self.resolution))]
         path = [polar_to_xy(r, theta) for r, theta in polar_path]
+        if self.type == "MESH":
+            self.generate_mesh(path)
+        elif self.type == "POLY":
+            self.generate_curve(path)
+        else:
+            raise RuntimeError(f"Unknown object type {self.type}")
 
+    def generate_curve(self, path):
+        curve: bpy.types.Curve = self.id_data.data
+        curve.dimensions = "2D"
+        curve.resolution_u = 2
+        curve.splines.clear()
+        polyline = curve.splines.new('POLY')
+
+        polyline.points.add(len(path) - 1)
+        for i, (x, y) in enumerate(path):
+            polyline.points[i].co = (x, y, 0.0, 1.0)
+
+        polyline.use_cyclic_u = True
+        polyline.use_cyclic_v = True
+        bpy.context.object.data.fill_mode = "BOTH" if self.make_face else "NONE"
+
+    def generate_mesh(self, path):
         bm = bmesh.new()
         verts = [bm.verts.new(Vector((x, y, 0.0))) for (x, y) in path]
         if not self.make_face:
@@ -95,11 +129,12 @@ class SineGearData(bpy.types.PropertyGroup, Lockable):
         bm.free()
         self.id_data.data.update()
 
-    make_face: MakeFaceProperty(update=generate_mesh)
-    radius: RadiusProperty(update=generate_mesh)
-    resolution: ResolutionProperty(update=generate_mesh)
-    teeth_count: TeethCountProperty(update=generate_mesh)
-    teeth_length: TeethLengthProperty(update=generate_mesh)
+    make_face: MakeFaceProperty(update=if_unlocked(generate))
+    radius: RadiusProperty(update=if_unlocked(generate))
+    resolution: ResolutionProperty(update=if_unlocked(generate))
+    teeth_count: TeethCountProperty(update=if_unlocked(generate))
+    teeth_length: TeethLengthProperty(update=if_unlocked(generate))
+    type: TypeProperty(update=if_unlocked(generate))
 
 
 class SineGear(bpy.types.Operator):
@@ -113,10 +148,19 @@ class SineGear(bpy.types.Operator):
     resolution: ResolutionProperty()
     teeth_count: TeethCountProperty()
     teeth_length: TeethLengthProperty()
+    type: TypeProperty()
 
     def execute(self, context):
-        mesh = bpy.data.meshes.new("SineGear")
-        obj = bpy_extras.object_utils.object_data_add(context, mesh, operator=None)
+        if self.type == "MESH":
+            obdata = bpy.data.meshes.new("SineGear")
+        elif self.type == "POLY":
+            obdata = bpy.data.curves.new("Sinegear", type='CURVE')
+        else:
+            raise RuntimeError(f"Unknown object type {self.type}")
+
+        obj = bpy_extras.object_utils.object_data_add(context,
+                                                      obdata=obdata,
+                                                      operator=None)
 
         sinegear_data: SineGearData = make_sinegear_data(obj)
         sinegear_data.lock()
@@ -134,7 +178,7 @@ class SineGear(bpy.types.Operator):
             sinegear_data.type = self.type
 
         sinegear_data.unlock()
-        sinegear_data.generate_mesh(context)
+        sinegear_data.generate(context)
         return {"FINISHED"}
 
 
@@ -149,7 +193,6 @@ class SineGearEditPanel(bpy.types.Panel):
     @classmethod
     def poll(cls, context):
         return len(context.selected_objects) > 0 \
-               and context.object.type == "MESH" \
                and has_sinegear_data(context.object) \
                and context.object in context.selected_objects
 
