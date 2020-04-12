@@ -1,7 +1,6 @@
 import bpy
 import bpy_extras
 from bpy.props import BoolProperty, PointerProperty
-from typing import List
 
 from .globals import has_meshify_data, get_meshify_data, get_meshify_enum, make_meshify_data
 
@@ -208,50 +207,47 @@ class MeshifyEditPanel(bpy.types.Panel):
             source_visibility_operator.source_visibility = is_source_visible
 
 
-def detect_changes():
-    processed_list: List[bpy.types.Object] = list()
+@bpy.app.handlers.persistent
+def detect_changes(_):
+    processed_list = detect_changes.processed_list
+    context = bpy.context
+    depsgraph = context.evaluated_depsgraph_get()
+    is_depsgraph_update_root = len(processed_list) == 0
 
-    @bpy.app.handlers.persistent
-    def handler(_):
-        nonlocal processed_list
-        context = bpy.context
-        depsgraph = context.evaluated_depsgraph_get()
-        is_root = len(processed_list) == 0
+    def find_all_meshify_obj_from_source(source_obj):
+        return [other_obj for other_obj in bpy.data.objects
+                if has_meshify_data(other_obj) and get_meshify_data(other_obj).source_object == source_obj]
 
-        def find_all_meshify_obj_from_source(source_obj):
-            return [other_obj for other_obj in bpy.data.objects
-                    if has_meshify_data(other_obj) and get_meshify_data(other_obj).source_object == source_obj]
+    def update_meshify_obj(meshify_obj, processed_list):
+        if meshify_obj not in processed_list:
+            processed_list.append(meshify_obj)
+            meshify_data = get_meshify_data(meshify_obj)
+            meshify_data.meshify(context)
 
-        def update_meshify_obj(meshify_obj, processed_list):
-            if meshify_obj not in processed_list:
-                processed_list.append(meshify_obj)
-                meshify_data = get_meshify_data(meshify_obj)
-                meshify_data.meshify(context)
+    for changed_obj in [obj for obj in map(lambda _: _.id.original, depsgraph.updates)]:
+        if is_meshify_source(changed_obj):
+            for meshify_obj in find_all_meshify_obj_from_source(changed_obj):
+                update_meshify_obj(meshify_obj, processed_list)
 
-        for changed_obj in [obj for obj in map(lambda _: _.id.original, depsgraph.updates)]:
-            if is_meshify_source(changed_obj):
-                for meshify_obj in find_all_meshify_obj_from_source(changed_obj):
-                    update_meshify_obj(meshify_obj, processed_list)
+        if has_meshify_data(changed_obj):
+            update_meshify_obj(changed_obj, processed_list)
 
-            if has_meshify_data(changed_obj):
-                update_meshify_obj(changed_obj, processed_list)
-
-        if is_root:
-            processed_list = list()
-
-    return handler
+    if is_depsgraph_update_root:
+        detect_changes.processed_list = list()
 
 
 def register():
+    detect_changes.processed_list = list()
+
     bpy.utils.register_class(MeshifyData)
     bpy.utils.register_class(Meshify)
     bpy.utils.register_class(MeshifyToggleSource)
     bpy.utils.register_class(MeshifyEditPanel)
-    bpy.app.handlers.depsgraph_update_post.append(detect_changes())
+    bpy.app.handlers.depsgraph_update_post.append(detect_changes)
 
 
 def unregister():
-    bpy.app.handlers.depsgraph_update_post.remove(detect_changes())
+    bpy.app.handlers.depsgraph_update_post.remove(detect_changes)
     bpy.utils.unregister_class(MeshifyEditPanel)
     bpy.utils.unregister_class(Meshify)
     bpy.utils.unregister_class(MeshifyToggleSource)
