@@ -35,12 +35,10 @@ def RadiusProperty(update=None):
 def ResolutionProperty(update=None):
     return IntProperty(
         name="Resolution",
-        default=360,
+        default=2,
         description="Resolution",
-        min=3,
-        soft_min=3,
-        max=3600,
-        soft_max=3600,
+        min=2,
+        soft_min=2,
         step=1,
         update=update)
 
@@ -85,13 +83,15 @@ def TypeProperty(update=None):
 class SineGearData(bpy.types.PropertyGroup, Lockable):
 
     def generate(self, context):
+        points_count = self.resolution * self.teeth_count
+
         def step_to_theta(i):
             theta_min = -180
             theta_max = 180
-            return math.radians(theta_min + (i * (theta_max - theta_min) / self.resolution))
+            return math.radians(theta_min + (i * (theta_max - theta_min) / points_count))
 
         polar_path = [(self.radius + (math.sin(theta * self.teeth_count) * self.teeth_length), theta)
-                      for theta in map(step_to_theta, range(0, self.resolution))]
+                      for theta in map(step_to_theta, range(0, points_count))]
         path = [polar_to_xy(r, theta) for r, theta in polar_path]
         if self.type == "MESH":
             self.generate_mesh(path)
@@ -120,6 +120,7 @@ class SineGearData(bpy.types.PropertyGroup, Lockable):
         # bpy.ops.curvetools.add_toolpath_offset_curve(offset=-0.1, pitch=-0.09, step_angle=0.0245437, count=1)
         # curve.splines.remove(curve.splines.active)
         # bpy.ops.object.mode_set(mode="OBJECT")
+
     def generate_mesh(self, path):
         bm = bmesh.new()
         verts = [bm.verts.new(Vector((x, y, 0.0))) for (x, y) in path]
