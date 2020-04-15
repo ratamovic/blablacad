@@ -115,6 +115,11 @@ class SineGearData(bpy.types.PropertyGroup, Lockable):
         polyline.use_cyclic_v = True
         bpy.context.object.data.fill_mode = "BOTH" if self.make_face else "NONE"
 
+        # bpy.ops.object.mode_set(mode="EDIT")
+        # bpy.ops.curve.select_all(action="SELECT")
+        # bpy.ops.curvetools.add_toolpath_offset_curve(offset=-0.1, pitch=-0.09, step_angle=0.0245437, count=1)
+        # curve.splines.remove(curve.splines.active)
+        # bpy.ops.object.mode_set(mode="OBJECT")
     def generate_mesh(self, path):
         bm = bmesh.new()
         verts = [bm.verts.new(Vector((x, y, 0.0))) for (x, y) in path]
