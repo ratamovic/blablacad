@@ -34,6 +34,15 @@ def KeepInSyncProperty(update=None):
 
 
 # noinspection PyPep8Naming
+def MakeFanFaceEnabledProperty(update=None):
+    return BoolProperty(
+        name="Enable Make Fan Face",
+        default=False,
+        description="Make a fan face from the curve",
+        update=update)
+
+
+# noinspection PyPep8Naming
 def SourceObjectProperty(update=None):
     return PointerProperty(
         name="Source object",
@@ -101,6 +110,16 @@ class MeshifyData(bpy.types.PropertyGroup, Lockable):
                     self.digest = other_digest
 
                     obj.data = evaluated_mesh
+                    if self.make_fan_face_enabled:
+                        previous_selection = bpy.context.view_layer.objects.active
+                        bpy.context.view_layer.objects.active = obj
+                        bpy.ops.object.mode_set(mode="EDIT")
+                        bpy.ops.mesh.select_all(action="SELECT")
+                        bpy.ops.mesh.edge_face_add()
+                        bpy.ops.mesh.poke()
+                        bpy.ops.mesh.dissolve_limited()
+                        bpy.ops.object.mode_set(mode="OBJECT")
+                        bpy.context.view_layer.objects.active = previous_selection
 
             if self.sync_rotation:
                 if obj.rotation_euler != self.source_object.rotation_euler:
@@ -112,6 +131,7 @@ class MeshifyData(bpy.types.PropertyGroup, Lockable):
 
     digest: DigestProperty()
     keep_in_sync: KeepInSyncProperty(update=if_unlocked(meshify))
+    make_fan_face_enabled: MakeFanFaceEnabledProperty(update=if_unlocked(meshify))
     source_object: SourceObjectProperty(update=if_unlocked(meshify))
     sync_location: SyncLocationProperty(update=if_unlocked(meshify))
     sync_mesh: SyncMeshProperty(update=if_unlocked(meshify))
@@ -230,6 +250,9 @@ class MeshifyEditPanel(bpy.types.Panel):
         sync_col.prop(meshify_data, "sync_scale", text=meshify_props["sync_scale"].name)
 
         if meshify_data.source_object is not None:
+            if meshify_data.source_object.type == "CURVE":
+                layout.prop(meshify_data, "make_fan_face_enabled", text=meshify_props["make_fan_face_enabled"].name)
+
             is_source_visible = meshify_data.source_object.hide_get()
             source_visibility_operator = layout.operator(MeshifyToggleSource.bl_idname,
                                                          text="Show source" if is_source_visible else "Hide source",

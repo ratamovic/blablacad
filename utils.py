@@ -112,3 +112,30 @@ def copy_curve(to_curve: bpy.types.Curve, from_curve: bpy.types.Curve):
         to_spline.use_endpoint_u = from_spline.use_endpoint_u
         to_spline.use_endpoint_v = from_spline.use_endpoint_v
         to_spline.use_smooth = from_spline.use_smooth
+
+
+def hash_mesh(hash_algo, mesh: bpy.types.Mesh):
+    edge: bpy.types.MeshEdge
+    vertex: bpy.types.MeshVertex
+    loop: bpy.types.MeshLoop
+    polygon: bpy.types.MeshPolygon
+
+    for vertex in mesh.vertices:
+        hash_algo.update(array("d", [vertex.bevel_weight]))
+        hash_algo.update(array("d", vertex.co))
+        hash_algo.update(array("d", vertex.normal))
+
+    for edge in mesh.edges:
+        hash_algo.update(array("d", [edge.bevel_weight, edge.crease, edge.crease]))
+        hash_algo.update(array("l", edge.vertices))
+        hash_algo.update(array("l", [edge.is_loose, edge.use_edge_sharp, edge.use_seam]))
+
+    for loop in mesh.loops:
+        hash_algo.update(array("l", [loop.edge_index, loop.vertex_index]))
+        hash_algo.update(array("d", loop.normal))
+
+    for polygon in mesh.polygons:
+        hash_algo.update(array("d", [polygon.loop_start, polygon.loop_total]))
+        hash_algo.update(array("d", polygon.normal))
+        hash_algo.update(array("l", [polygon.use_smooth]))
+        hash_algo.update(array("l", polygon.vertices))
