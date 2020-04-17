@@ -4,12 +4,12 @@ import bpy
 import bpy_extras
 import hashlib
 from array import array
-from bpy.props import BoolProperty, FloatProperty, IntProperty, PointerProperty, StringProperty
+from bpy.props import BoolProperty, FloatProperty, PointerProperty, StringProperty
 from curve_tools import internal as curve_tools
 from mathutils import Vector
 
-from .globals import has_curvify_data, get_curvify_data, get_curvify_enum, make_curvify_data
-from .utils import Lockable, if_unlocked
+from .globals import get_curvify_data, get_curvify_enum, has_curvify_data, make_curvify_data
+from .utils import Lockable, hash_curve, if_unlocked, copy_curve
 
 
 def is_curvify_source(obj):
@@ -83,21 +83,21 @@ def SyncScaleProperty(update=None):
 
 
 # noinspection PyPep8Naming
-def EnableOffsetProperty(update=None):
-    return BoolProperty(
-        name="Enable",
-        default=False,
-        description="Enable offset",
-        update=update)
-
-
-# noinspection PyPep8Naming
 def OffsetProperty(update=None):
     return FloatProperty(
         name="Offset",
         default=1.0,
         description="Distance between the original and the first trace",
         unit="LENGTH",
+        update=update)
+
+
+# noinspection PyPep8Naming
+def OffsetEnabledProperty(update=None):
+    return BoolProperty(
+        name="Enable Offset",
+        default=False,
+        description="Offset the curve",
         update=update)
 
 
@@ -125,89 +125,65 @@ class CurvifyData(bpy.types.PropertyGroup, Lockable):
 
     def curvify(self, context):
         if self.source_object is not None and self.keep_in_sync:
+            obj: bpy.types.Object = self.id_data
+            spline: bpy.types.Spline
+
             if self.sync_location:
-                if self.id_data.location != self.source_object.location:
-                    self.id_data.location = self.source_object.location
+                if obj.location != self.source_object.location:
+                    obj.location = self.source_object.location
             if self.sync_curve:
-                obj: bpy.types.Object = self.id_data
-                curve: bpy.types.Curve = obj.data
                 depsgraph = context.evaluated_depsgraph_get()
-                evaluated_object = self.source_object.evaluated_get(depsgraph)
-                point: bpy.types.SplinePoint
-                other_curve: bpy.types.Curve = evaluated_object.data
-                other_spline: bpy.types.Spline
-                other_point: bpy.types.SplinePoint
+                evaluated_other_object = self.source_object.evaluated_get(depsgraph)
+                other_curve: bpy.types.Curve = evaluated_other_object.data
 
                 other_hash = hashlib.sha1()
-                other_hash.update(array("l", [other_curve.resolution_u, other_curve.resolution_v]))
-                other_hash.update(bytes(other_curve.dimensions, "ascii"))
-                for other_spline in other_curve.splines:
-                    other_hash.update(bytes(other_spline.radius_interpolation, "ascii"))
-                    other_hash.update(bytes(other_spline.tilt_interpolation, "ascii"))
-                    other_hash.update(array("l", [
-                        other_spline.order_u, other_spline.order_v, other_spline.resolution_u,
-                        other_spline.resolution_v, other_spline.use_bezier_u,
-                        other_spline.use_bezier_v, other_spline.use_cyclic_u, other_spline.use_cyclic_v,
-                        other_spline.use_endpoint_u, other_spline.use_endpoint_v, other_spline.use_smooth]))
-                    for other_point in other_spline.points:
-                        other_hash.update(array("d", other_point.co))
-                        other_hash.update(array("d", [other_point.tilt, other_point.weight]))
-
-                other_hash.update(array("l", [self.enable_offset, self.round_line_join]))
+                hash_curve(other_hash, other_curve)
                 other_hash.update(array("d", [self.offset, self.resolution]))
                 other_digest = other_hash.hexdigest()
 
                 if self.digest != other_digest:
                     self.digest = other_digest
-                    curve.dimensions = other_curve.dimensions
-                    curve.resolution_u = other_curve.resolution_u
-                    curve.resolution_v = other_curve.resolution_v
+                    if obj.type == "MESH":
+                        bpy.ops.object.mode_set(mode="EDIT")
+                        try:
+                            bpy.ops.mesh.select_all(action='SELECT')
+                            bpy.ops.mesh.delete(type='VERT')
+                        except:
+                            pass
+                        bpy.ops.mesh.primitive_plane_add(enter_editmode=False, location=(0, 0, 0))
+                        bpy.ops.object.mode_set(mode="OBJECT")
+                        bpy.ops.object.convert(target="CURVE", keep_original=False)
+                        bpy.ops.object.mode_set(mode="EDIT")
+                        try:
+                            bpy.ops.curve.select_all(action='SELECT')
+                            bpy.ops.curve.delete(type='VERT')
+                        except:
+                            pass
+                        bpy.ops.object.mode_set(mode="OBJECT")
 
-                    curve.splines.clear()
-                    for other_spline in other_curve.splines:
-                        spline: bpy.types.Spline = curve.splines.new(other_spline.type)
-                        spline.points.add(len(other_spline.points) - 1)
-                        for i, point in enumerate(other_spline.points):
-                            spline.points[i].co = point.co
-                            spline.points[i].hide = point.hide
-                            spline.points[i].tilt = point.tilt
-                            spline.points[i].weight = point.weight
-                            # spline.points[i].weight_softbody = point.weight_softbody
+                    curve: bpy.types.Curve = obj.data
+                    copy_curve(curve, other_curve)
 
-                        spline.hide = other_spline.hide
-                        spline.order_u = other_spline.order_u
-                        spline.order_v = other_spline.order_v
-                        spline.radius_interpolation = other_spline.radius_interpolation
-                        spline.resolution_u = other_spline.resolution_u
-                        spline.resolution_v = other_spline.resolution_v
-                        spline.tilt_interpolation = other_spline.tilt_interpolation
-                        spline.use_bezier_u = other_spline.use_bezier_u
-                        spline.use_bezier_v = other_spline.use_bezier_v
-                        spline.use_cyclic_u = other_spline.use_cyclic_u
-                        spline.use_cyclic_v = other_spline.use_cyclic_v
-                        spline.use_endpoint_u = other_spline.use_endpoint_u
-                        spline.use_endpoint_v = other_spline.use_endpoint_v
-                        spline.use_smooth = other_spline.use_smooth
+                    for spline in curve.splines:
+                        if self.offset_enabled:
+                            origin = Vector((0.0, 0.0, 0.0))
+                            traces = curve_tools.offsetPolygonOfSpline(spline,
+                                                                       self.offset,
+                                                                       self.resolution,
+                                                                       self.round_line_join)
+                            for trace in traces:
+                                curve_tools.addPolygonSpline(obj,
+                                                             spline.use_cyclic_u,
+                                                             [vertex - origin for vertex in trace])
 
-                    if self.enable_offset:
-                        origin = Vector((0.0, 0.0, 0.0))
-                        traces = curve_tools.offsetPolygonOfSpline(spline,
-                                                                   self.offset,
-                                                                   self.resolution,
-                                                                   self.round_line_join)
-                        for trace in traces:
-                            curve_tools.addPolygonSpline(obj,
-                                                         spline.use_cyclic_u,
-                                                         [vertex - origin for vertex in trace])
-
-                        curve.splines.remove(spline)
+                            curve.splines.remove(spline)
 
             if self.sync_rotation:
-                if self.id_data.rotation_euler != self.source_object.rotation_euler:
-                    self.id_data.rotation_euler = self.source_object.rotation_euler
+                if obj.rotation_euler != self.source_object.rotation_euler:
+                    obj.rotation_euler = self.source_object.rotation_euler
             if self.sync_scale:
-                if self.id_data.scale != self.source_object.scale:
-                    self.id_data.scale = self.source_object.scale
+                if obj.scale != self.source_object.scale:
+                    obj.scale = self.source_object.scale
 
     digest: DigestProperty()
     keep_in_sync: KeepInSyncProperty(update=if_unlocked(curvify))
@@ -217,8 +193,8 @@ class CurvifyData(bpy.types.PropertyGroup, Lockable):
     sync_rotation: SyncRotationProperty(update=if_unlocked(curvify))
     sync_scale: SyncScaleProperty(update=if_unlocked(curvify))
 
-    enable_offset: EnableOffsetProperty(update=if_unlocked(curvify))
     offset: OffsetProperty(update=if_unlocked(curvify))
+    offset_enabled: OffsetEnabledProperty(update=if_unlocked(curvify))
     resolution: ResolutionProperty(update=if_unlocked(curvify))
     round_line_join: RoundLineJoinProperty(update=if_unlocked(curvify))
 
@@ -251,7 +227,7 @@ class Curvify(bpy.types.Operator):
         selected_obj = context.object
         set_curvify_source(selected_obj)
 
-        curve = bpy.data.curves.new("Curvify", type='CURVE')
+        curve = bpy.data.curves.new("Curvify", type="CURVE")
         obj = bpy_extras.object_utils.object_data_add(context,
                                                       obdata=curve,
                                                       operator=None,
@@ -334,11 +310,11 @@ class CurvifyEditPanel(bpy.types.Panel):
         sync_col.prop(curvify_data, "sync_scale", text=curvify_props["sync_scale"].name)
 
         self.layout.separator()
-        layout.prop(curvify_data, "enable_offset", text=curvify_props["enable_offset"].name)
-        sync_col = layout.column(align=True)
-        sync_col.prop(curvify_data, "offset", text=curvify_props["offset"].name)
-        sync_col.prop(curvify_data, "resolution", text=curvify_props["resolution"].name)
-        sync_col.prop(curvify_data, "round_line_join", text=curvify_props["round_line_join"].name)
+        layout.prop(curvify_data, "offset_enabled", text=curvify_props["offset_enabled"].name)
+        offset_col = layout.column(align=True)
+        offset_col.prop(curvify_data, "offset", text=curvify_props["offset"].name)
+        offset_col.prop(curvify_data, "resolution", text=curvify_props["resolution"].name)
+        offset_col.prop(curvify_data, "round_line_join", text=curvify_props["round_line_join"].name)
 
         if curvify_data.source_object is not None:
             is_source_visible = curvify_data.source_object.hide_get()
