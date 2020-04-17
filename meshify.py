@@ -1,9 +1,11 @@
 import bpy
 import bpy_extras
-from bpy.props import BoolProperty, PointerProperty
+import hashlib
+from array import array
+from bpy.props import BoolProperty, PointerProperty, StringProperty
 
 from .globals import has_meshify_data, get_meshify_data, get_meshify_enum, make_meshify_data
-from .utils import Lockable, if_unlocked
+from .utils import Lockable, hash_mesh, if_unlocked
 
 
 def is_meshify_source(obj):
@@ -12,6 +14,14 @@ def is_meshify_source(obj):
 
 def set_meshify_source(obj):
     obj["meshify_source"] = True
+
+
+# noinspection PyPep8Naming
+def DigestProperty():
+    return StringProperty(
+        name="Mesh digest",
+        default="",
+        description="Mesh digest to detect changes")
 
 
 # noinspection PyPep8Naming
@@ -71,19 +81,36 @@ def SyncScaleProperty(update=None):
 class MeshifyData(bpy.types.PropertyGroup, Lockable):
 
     def meshify(self, context):
+        obj: bpy.types.Object = self.id_data
         if self.source_object is not None and self.keep_in_sync:
             if self.sync_location:
-                self.id_data.location = self.source_object.location
+                if obj.location != self.source_object.location:
+                    obj.location = self.source_object.location
+
             if self.sync_mesh:
                 depsgraph = context.evaluated_depsgraph_get()
                 evaluated_object = self.source_object.evaluated_get(depsgraph)
                 evaluated_mesh = bpy.data.meshes.new_from_object(evaluated_object)
-                self.id_data.data = evaluated_mesh
-            if self.sync_rotation:
-                self.id_data.rotation_euler = self.source_object.rotation_euler
-            if self.sync_scale:
-                self.id_data.scale = self.source_object.scale
 
+                other_hash = hashlib.sha1()
+                hash_mesh(other_hash, evaluated_mesh)
+                other_hash.update(array("l", [self.make_fan_face_enabled, self.sync_location, self.sync_mesh, self.sync_rotation,
+                                              self.sync_scale]))
+                other_digest = other_hash.hexdigest()
+                if self.digest != other_digest:
+                    self.digest = other_digest
+
+                    obj.data = evaluated_mesh
+
+            if self.sync_rotation:
+                if obj.rotation_euler != self.source_object.rotation_euler:
+                    obj.rotation_euler = self.source_object.rotation_euler
+
+            if self.sync_scale:
+                if obj.scale != self.source_object.scale:
+                    obj.scale = self.source_object.scale
+
+    digest: DigestProperty()
     keep_in_sync: KeepInSyncProperty(update=if_unlocked(meshify))
     source_object: SourceObjectProperty(update=if_unlocked(meshify))
     sync_location: SyncLocationProperty(update=if_unlocked(meshify))

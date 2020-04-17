@@ -34,84 +34,81 @@ def if_unlocked(func):
     return _if_unlocked
 
 
-def hash_curve(other_hash, other_curve: bpy.types.Curve):
-    other_spline: bpy.types.Spline
-    other_point: bpy.types.SplinePoint
-    other_bezier_point: bpy.types.BezierSplinePoint
-
-    other_hash.update(array("l", [other_curve.resolution_u, other_curve.resolution_v]))
-    other_hash.update(bytes(other_curve.dimensions, "ascii"))
-    for other_spline in other_curve.splines:
-        other_hash.update(bytes(other_spline.type, "ascii"))
-        other_hash.update(bytes(other_spline.radius_interpolation, "ascii"))
-        other_hash.update(bytes(other_spline.tilt_interpolation, "ascii"))
-        other_hash.update(array("l", [
-            other_spline.order_u, other_spline.order_v, other_spline.resolution_u,
-            other_spline.resolution_v, other_spline.use_bezier_u,
-            other_spline.use_bezier_v, other_spline.use_cyclic_u, other_spline.use_cyclic_v,
-            other_spline.use_endpoint_u, other_spline.use_endpoint_v, other_spline.use_smooth]))
-        for other_bezier_point in other_spline.bezier_points:
-            other_hash.update(array("d", other_bezier_point.co))
-            other_hash.update(array("d", other_bezier_point.handle_left))
-            other_hash.update(array("d", other_bezier_point.handle_right))
-            other_hash.update(bytes(other_bezier_point.handle_right_type, "ascii"))
-            other_hash.update(bytes(other_bezier_point.handle_left_type, "ascii"))
-        for other_point in other_spline.points:
-            other_hash.update(array("d", other_point.co))
-            other_hash.update(array("d", [other_point.tilt, other_point.weight]))
-
-
-def copy_curve(curve: bpy.types.Curve, other_curve: bpy.types.Curve):
-    other_spline: bpy.types.Spline
-    other_point: bpy.types.SplinePoint
-    other_bezier_point: bpy.types.BezierSplinePoint
-
-    if len(curve.splines) > 0:
-        curve.splines.clear()
+def hash_curve(hash_algo, curve: bpy.types.Curve):
+    spline: bpy.types.Spline
     point: bpy.types.SplinePoint
     bezier_point: bpy.types.BezierSplinePoint
 
-    curve.dimensions = other_curve.dimensions
-    curve.resolution_u = other_curve.resolution_u
-    curve.resolution_v = other_curve.resolution_v
+    hash_algo.update(array("l", [curve.resolution_u, curve.resolution_v]))
+    hash_algo.update(bytes(curve.dimensions, "ascii"))
+    for spline in curve.splines:
+        hash_algo.update(bytes(spline.type, "ascii"))
+        hash_algo.update(bytes(spline.radius_interpolation, "ascii"))
+        hash_algo.update(bytes(spline.tilt_interpolation, "ascii"))
+        hash_algo.update(array("l", [
+            spline.order_u, spline.order_v, spline.resolution_u,
+            spline.resolution_v, spline.use_bezier_u,
+            spline.use_bezier_v, spline.use_cyclic_u, spline.use_cyclic_v,
+            spline.use_endpoint_u, spline.use_endpoint_v, spline.use_smooth]))
+        for bezier_point in spline.bezier_points:
+            hash_algo.update(array("d", bezier_point.co))
+            hash_algo.update(array("d", bezier_point.handle_left))
+            hash_algo.update(array("d", bezier_point.handle_right))
+            hash_algo.update(bytes(bezier_point.handle_right_type, "ascii"))
+            hash_algo.update(bytes(bezier_point.handle_left_type, "ascii"))
+        for point in spline.points:
+            hash_algo.update(array("d", point.co))
+            hash_algo.update(array("d", [point.tilt, point.weight]))
 
-    for other_spline in other_curve.splines:
-        spline: bpy.types.Spline = curve.splines.new(other_spline.type)
-        if spline.type == "BEZIER":
-            spline.bezier_points.add(len(other_spline.bezier_points) - 1)
-            for i, bezier_point in enumerate(other_spline.bezier_points):
-                spline.bezier_points[i].co = bezier_point.co
-                spline.bezier_points[i].handle_left_type = bezier_point.handle_left_type
-                spline.bezier_points[i].handle_left = bezier_point.handle_left
-                spline.bezier_points[i].handle_right_type = bezier_point.handle_right_type
-                spline.bezier_points[i].handle_right = bezier_point.handle_right
-                spline.bezier_points[i].hide = bezier_point.hide
-                spline.bezier_points[i].radius = bezier_point.radius
-                spline.bezier_points[i].select_control_point = bezier_point.select_control_point
-                spline.bezier_points[i].select_left_handle = bezier_point.select_left_handle
-                spline.bezier_points[i].select_right_handle = bezier_point.select_right_handle
-                spline.bezier_points[i].tilt = bezier_point.tilt
-                spline.bezier_points[i].weight_softbody = bezier_point.weight_softbody
+
+def copy_curve(to_curve: bpy.types.Curve, from_curve: bpy.types.Curve):
+    from_spline: bpy.types.Spline
+    from_point: bpy.types.SplinePoint
+    from_bezier_point: bpy.types.BezierSplinePoint
+
+    if len(to_curve.splines) > 0:
+        to_curve.splines.clear()
+
+    to_curve.dimensions = from_curve.dimensions
+    to_curve.resolution_u = from_curve.resolution_u
+    to_curve.resolution_v = from_curve.resolution_v
+
+    for from_spline in from_curve.splines:
+        to_spline: bpy.types.Spline = to_curve.splines.new(from_spline.type)
+        if to_spline.type == "BEZIER":
+            to_spline.bezier_points.add(len(from_spline.bezier_points) - 1)
+            for i, from_bezier_point in enumerate(from_spline.bezier_points):
+                to_spline.bezier_points[i].co = from_bezier_point.co
+                to_spline.bezier_points[i].handle_left_type = from_bezier_point.handle_left_type
+                to_spline.bezier_points[i].handle_left = from_bezier_point.handle_left
+                to_spline.bezier_points[i].handle_right_type = from_bezier_point.handle_right_type
+                to_spline.bezier_points[i].handle_right = from_bezier_point.handle_right
+                to_spline.bezier_points[i].hide = from_bezier_point.hide
+                to_spline.bezier_points[i].radius = from_bezier_point.radius
+                to_spline.bezier_points[i].select_control_point = from_bezier_point.select_control_point
+                to_spline.bezier_points[i].select_left_handle = from_bezier_point.select_left_handle
+                to_spline.bezier_points[i].select_right_handle = from_bezier_point.select_right_handle
+                to_spline.bezier_points[i].tilt = from_bezier_point.tilt
+                to_spline.bezier_points[i].weight_softbody = from_bezier_point.weight_softbody
         else:
-            spline.points.add(len(other_spline.points) - 1)
-            for i, point in enumerate(other_spline.points):
-                spline.points[i].co = point.co
-                spline.points[i].hide = point.hide
-                spline.points[i].tilt = point.tilt
-                spline.points[i].weight = point.weight
+            to_spline.points.add(len(from_spline.points) - 1)
+            for i, from_point in enumerate(from_spline.points):
+                to_spline.points[i].co = from_point.co
+                to_spline.points[i].hide = from_point.hide
+                to_spline.points[i].tilt = from_point.tilt
+                to_spline.points[i].weight = from_point.weight
 
-        spline.hide = other_spline.hide
-        spline.order_u = other_spline.order_u
-        spline.order_v = other_spline.order_v
-        spline.radius_interpolation = other_spline.radius_interpolation
-        spline.resolution_u = other_spline.resolution_u
-        spline.resolution_v = other_spline.resolution_v
-        spline.tilt_interpolation = other_spline.tilt_interpolation
-        spline.use_bezier_u = other_spline.use_bezier_u
-        spline.use_bezier_v = other_spline.use_bezier_v
-        spline.use_cyclic_u = other_spline.use_cyclic_u
-        spline.use_cyclic_v = other_spline.use_cyclic_v
-        spline.use_endpoint_u = other_spline.use_endpoint_u
-        spline.use_endpoint_v = other_spline.use_endpoint_v
-        spline.use_smooth = other_spline.use_smooth
-
+        to_spline.hide = from_spline.hide
+        to_spline.order_u = from_spline.order_u
+        to_spline.order_v = from_spline.order_v
+        to_spline.radius_interpolation = from_spline.radius_interpolation
+        to_spline.resolution_u = from_spline.resolution_u
+        to_spline.resolution_v = from_spline.resolution_v
+        to_spline.tilt_interpolation = from_spline.tilt_interpolation
+        to_spline.use_bezier_u = from_spline.use_bezier_u
+        to_spline.use_bezier_v = from_spline.use_bezier_v
+        to_spline.use_cyclic_u = from_spline.use_cyclic_u
+        to_spline.use_cyclic_v = from_spline.use_cyclic_v
+        to_spline.use_endpoint_u = from_spline.use_endpoint_u
+        to_spline.use_endpoint_v = from_spline.use_endpoint_v
+        to_spline.use_smooth = from_spline.use_smooth
