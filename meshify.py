@@ -101,13 +101,13 @@ class MeshifyData(bpy.types.PropertyGroup, Lockable):
                 evaluated_object = self.source_object.evaluated_get(depsgraph)
                 evaluated_mesh = bpy.data.meshes.new_from_object(evaluated_object)
 
-                other_hash = hashlib.sha1()
-                hash_mesh(other_hash, evaluated_mesh)
-                other_hash.update(array("l", [self.make_fan_face_enabled, self.sync_location, self.sync_mesh, self.sync_rotation,
+                source_hash = hashlib.sha1()
+                hash_mesh(source_hash, evaluated_mesh)
+                source_hash.update(array("l", [self.make_fan_face_enabled, self.sync_location, self.sync_mesh, self.sync_rotation,
                                               self.sync_scale]))
-                other_digest = other_hash.hexdigest()
-                if self.digest != other_digest:
-                    self.digest = other_digest
+                source_digest = source_hash.hexdigest()
+                if self.digest != source_digest:
+                    self.digest = source_digest
 
                     obj.data = evaluated_mesh
                     if self.make_fan_face_enabled:
