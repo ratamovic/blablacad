@@ -133,16 +133,16 @@ class CurvifyData(bpy.types.PropertyGroup, Lockable):
                     obj.location = self.source_object.location
             if self.sync_curve:
                 depsgraph = context.evaluated_depsgraph_get()
-                evaluated_other_object = self.source_object.evaluated_get(depsgraph)
-                other_curve: bpy.types.Curve = evaluated_other_object.data
+                source_evaluated_object = self.source_object.evaluated_get(depsgraph)
+                source_curve: bpy.types.Curve = source_evaluated_object.data
 
-                other_hash = hashlib.sha1()
-                hash_curve(other_hash, other_curve)
-                other_hash.update(array("d", [self.offset, self.resolution]))
-                other_digest = other_hash.hexdigest()
+                source_hash = hashlib.sha1()
+                hash_curve(source_hash, source_curve)
+                source_hash.update(array("d", [self.offset, self.resolution]))
+                source_digest = source_hash.hexdigest()
 
-                if self.digest != other_digest:
-                    self.digest = other_digest
+                if self.digest != source_digest:
+                    self.digest = source_digest
                     if obj.type == "MESH":
                         bpy.ops.object.mode_set(mode="EDIT")
                         try:
@@ -162,7 +162,7 @@ class CurvifyData(bpy.types.PropertyGroup, Lockable):
                         bpy.ops.object.mode_set(mode="OBJECT")
 
                     curve: bpy.types.Curve = obj.data
-                    copy_curve(curve, other_curve)
+                    copy_curve(curve, source_curve)
 
                     for spline in curve.splines:
                         if self.offset_enabled:
