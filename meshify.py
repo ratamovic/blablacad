@@ -43,6 +43,15 @@ def MakeFanFaceEnabledProperty(update=None):
 
 
 # noinspection PyPep8Naming
+def RemoveDoubleProperty(update=None):
+    return BoolProperty(
+        name="RemoveDouble",
+        default=False,
+        description="Remove doubles by merging vertices by distance",
+        update=update)
+
+
+# noinspection PyPep8Naming
 def SourceObjectProperty(update=None):
     return PointerProperty(
         name="Source object",
@@ -121,6 +130,15 @@ class MeshifyData(bpy.types.PropertyGroup, Lockable):
                         bpy.ops.object.mode_set(mode="OBJECT")
                         bpy.context.view_layer.objects.active = previous_selection
 
+                    if self.remove_doubles:
+                        previous_selection = bpy.context.view_layer.objects.active
+                        bpy.context.view_layer.objects.active = self.id_data
+                        bpy.ops.object.mode_set(mode="EDIT")
+                        bpy.ops.mesh.select_all(action="SELECT")
+                        bpy.ops.mesh.remove_doubles(threshold=0.002)
+                        bpy.ops.object.mode_set(mode="OBJECT")
+                        bpy.context.view_layer.objects.active = previous_selection
+
             if self.sync_rotation:
                 if obj.rotation_euler != self.source_object.rotation_euler:
                     obj.rotation_euler = self.source_object.rotation_euler
@@ -132,6 +150,7 @@ class MeshifyData(bpy.types.PropertyGroup, Lockable):
     digest: DigestProperty()
     keep_in_sync: KeepInSyncProperty(update=if_unlocked(meshify))
     make_fan_face_enabled: MakeFanFaceEnabledProperty(update=if_unlocked(meshify))
+    remove_doubles: RemoveDoubleProperty(update=if_unlocked(meshify))
     source_object: SourceObjectProperty(update=if_unlocked(meshify))
     sync_location: SyncLocationProperty(update=if_unlocked(meshify))
     sync_mesh: SyncMeshProperty(update=if_unlocked(meshify))
@@ -248,6 +267,8 @@ class MeshifyEditPanel(bpy.types.Panel):
         sync_col.prop(meshify_data, "sync_mesh", text=meshify_props["sync_mesh"].name)
         sync_col.prop(meshify_data, "sync_rotation", text=meshify_props["sync_rotation"].name)
         sync_col.prop(meshify_data, "sync_scale", text=meshify_props["sync_scale"].name)
+        sync_col.separator()
+        sync_col.prop(meshify_data, "remove_doubles", text=meshify_props["remove_doubles"].name)
 
         if meshify_data.source_object is not None:
             if meshify_data.source_object.type == "CURVE":
